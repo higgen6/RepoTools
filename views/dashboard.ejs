@@ -1,0 +1,390 @@
+<%- include("partials/head", { pageTitle }) %>
+<%- include("partials/header") %>
+<main class="mx-auto max-w-7xl px-5 py-8 lg:px-8">
+  <% if (flashMessage) { %>
+    <div data-auto-dismiss="true" class="mb-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><%= flashMessage %></div>
+  <% } %>
+  <% if (errorMessage) { %>
+    <div data-auto-dismiss="true" class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><%= errorMessage %></div>
+  <% } %>
+
+  <section class="panel overflow-hidden">
+    <div class="panel-header">
+      <div>
+        <div class="label">Current Directory</div>
+        <h2 class="mt-1 text-lg font-semibold text-ink">Choose the folder RepoTools should inspect</h2>
+      </div>
+    </div>
+    <div class="panel-body">
+      <form method="post" action="/directory" class="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
+        <div>
+          <label for="directoryPath" class="mb-2 block text-sm font-medium text-ink">Folder path</label>
+          <input
+            id="directoryPath"
+            name="directoryPath"
+            class="input"
+            value="<%= activeDirectory || '' %>"
+            placeholder="C:\Projects\my-app"
+            spellcheck="false"
+            autocomplete="off"
+          >
+        </div>
+        <div class="flex items-end">
+          <button id="pick-directory-button" type="button" class="button-secondary w-full lg:w-auto">Browse</button>
+        </div>
+        <div class="flex items-end">
+          <button type="submit" class="button-primary w-full lg:w-auto">Set Active Directory</button>
+        </div>
+      </form>
+
+      <div id="directory-feedback" class="mt-4 hidden rounded-xl px-4 py-3 text-sm"></div>
+
+      <div class="mt-5 grid gap-4 lg:grid-cols-[1fr_auto_auto_auto]">
+        <div class="rounded-2xl bg-mist px-4 py-4">
+          <div class="label">Active Path</div>
+          <div id="active-directory-path" class="mt-2 break-all font-mono text-sm text-ink"><%= activeDirectory || 'No directory selected yet.' %></div>
+        </div>
+        <div class="flex items-end">
+          <button id="copy-directory-button" type="button" class="button-secondary">Copy Path</button>
+        </div>
+        <div class="flex items-end">
+          <button id="open-directory-button" type="button" class="button-secondary" <%= activeDirectory ? '' : 'disabled' %>>Open Folder</button>
+        </div>
+        <% if (activeDirectory) { %>
+          <div class="flex items-end">
+            <form method="post" action="/directory/bookmark" class="w-full">
+              <input type="hidden" name="directoryPath" value="<%= activeDirectory %>">
+              <input type="hidden" name="action" value="<%= isActiveDirectoryBookmarked ? 'remove' : 'add' %>">
+              <button type="submit" class="button-secondary w-full"><%= isActiveDirectoryBookmarked ? 'Remove Bookmark' : 'Bookmark Folder' %></button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <% if (bookmarkedDirectories.length) { %>
+        <div class="mt-5">
+          <div class="label">Bookmarked Folders</div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <% bookmarkedDirectories.forEach((bookmarkPath) => { %>
+              <button type="button" class="chip max-w-full truncate <%= bookmarkPath === activeDirectory ? 'border-pine bg-pineSoft' : '' %>" data-recent-directory="<%= bookmarkPath %>" title="<%= bookmarkPath %>"><%= bookmarkPath %></button>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+
+      <% if (recentDirectories.length) { %>
+        <div class="mt-5">
+          <div class="label">Recent Directories</div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <% recentDirectories.forEach((recentPath) => { %>
+              <button type="button" class="chip max-w-full truncate <%= recentPath === activeDirectory ? 'border-pine bg-pineSoft' : '' %>" data-recent-directory="<%= recentPath %>" title="<%= recentPath %>"><%= recentPath %></button>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <% if (!inspection) { %>
+    <section class="mt-6 panel">
+      <div class="panel-body">
+        <h2 class="text-lg font-semibold text-ink">Ready when you are</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-slate">
+          Set a folder path above to inspect a project, read npm scripts, compare env keys, search files, and check common local ports.
+        </p>
+      </div>
+    </section>
+  <% } else { %>
+    <section class="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div class="space-y-6">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">Repo Summary</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Project signals and important files</h2>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div class="rounded-2xl border border-line bg-mist px-4 py-4">
+                <div class="label">Git</div>
+                <div class="mt-2 text-base font-semibold"><%= inspection.summary.isGitRepo ? 'Detected' : 'Not detected' %></div>
+                <div class="mt-1 text-sm text-slate"><%= inspection.gitSummary.branch ? `Branch ${inspection.gitSummary.branch}` : inspection.gitSummary.statusLine || 'No Git metadata' %></div>
+                <% if (inspection.gitSummary.trackingSummary) { %>
+                  <div class="mt-1 text-xs text-slate"><%= inspection.gitSummary.trackingSummary %></div>
+                <% } %>
+              </div>
+              <div class="rounded-2xl border border-line bg-mist px-4 py-4">
+                <div class="label">Node</div>
+                <div class="mt-2 text-base font-semibold"><%= inspection.summary.isNodeProject ? 'Detected' : 'Not detected' %></div>
+                <div class="mt-1 text-sm text-slate"><%= inspection.packageName || 'No package.json name found' %></div>
+              </div>
+              <div class="rounded-2xl border border-line bg-mist px-4 py-4">
+                <div class="label">Python</div>
+                <div class="mt-2 text-base font-semibold"><%= inspection.summary.isPythonProject ? 'Detected' : 'Not detected' %></div>
+                <div class="mt-1 text-sm text-slate"><%= inspection.files.pyprojectToml ? 'pyproject.toml present' : inspection.files.requirementsTxt ? 'requirements.txt present' : 'No Python markers' %></div>
+              </div>
+              <div class="rounded-2xl border border-line bg-mist px-4 py-4">
+                <div class="label">Docker</div>
+                <div class="mt-2 text-base font-semibold"><%= inspection.summary.isDockerProject ? 'Detected' : 'Not detected' %></div>
+                <div class="mt-1 text-sm text-slate"><%= inspection.files.dockerCompose ? 'Compose file present' : inspection.files.dockerFile ? 'Dockerfile present' : 'No Docker markers' %></div>
+              </div>
+            </div>
+
+            <div class="mt-5 grid gap-5 md:grid-cols-2">
+              <div>
+                <div class="label">Important Files</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <% const fileFlags = [
+                    ['package.json', inspection.files.packageJson],
+                    ['requirements.txt', inspection.files.requirementsTxt],
+                    ['pyproject.toml', inspection.files.pyprojectToml],
+                    ['Dockerfile', inspection.files.dockerFile],
+                    ['docker compose', inspection.files.dockerCompose],
+                    ['README', inspection.files.readme],
+                    ['.env', inspection.files.env],
+                    ['.env.example', inspection.files.envExample],
+                    ['.env.local', inspection.files.envLocal],
+                    ['package-lock.json', inspection.files.packageLock],
+                    ['pnpm-lock.yaml', inspection.files.pnpmLock],
+                    ['yarn.lock', inspection.files.yarnLock]
+                  ]; %>
+                  <% fileFlags.forEach(([label, present]) => { %>
+                    <span class="chip <%= present ? '' : 'opacity-60' %>"><%= present ? 'Found' : 'Missing' %> <%= label %></span>
+                  <% }) %>
+                </div>
+              </div>
+              <div>
+                <div class="label">Quick Stats</div>
+                <div class="mt-3 space-y-2 text-sm text-slate">
+                  <div>Scripts available: <span class="font-semibold text-ink"><%= inspection.scriptsCount %></span></div>
+                  <div>Env files found: <span class="font-semibold text-ink"><%= [inspection.files.env, inspection.files.envExample, inspection.files.envLocal].filter(Boolean).length %></span></div>
+                  <div>Git status: <span class="font-semibold text-ink"><%= inspection.gitSummary.statusLine || 'Not available' %></span></div>
+                  <div>Active directory: <span class="font-mono text-[13px] text-ink"><%= inspection.rootDirectory %></span></div>
+                </div>
+              </div>
+            </div>
+
+            <% if (inspection.summary.isGitRepo && inspection.gitSummary.statusCounts) { %>
+              <div class="mt-5">
+                <div class="label">Git Breakdown</div>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Staged <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.staged %></span></div>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Modified <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.modified %></span></div>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Untracked <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.untracked %></span></div>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Deleted <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.deleted %></span></div>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Renamed <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.renamed %></span></div>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">Conflicts <span class="ml-2 font-semibold text-ink"><%= inspection.gitSummary.statusCounts.conflicts %></span></div>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">Scripts</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Run one npm script at a time</h2>
+            </div>
+            <div id="script-status-label" class="chip"><%= scriptStatus.status %></div>
+          </div>
+          <div class="panel-body">
+            <div id="script-feedback" class="mb-4 hidden rounded-xl px-4 py-3 text-sm"></div>
+
+            <% if (inspection.summary.isNodeProject && inspection.scriptsCount) { %>
+              <div class="flex flex-wrap gap-2">
+                <% Object.keys(inspection.scripts).forEach((scriptName) => { %>
+                  <button type="button" class="run-script-button button-secondary" data-script-name="<%= scriptName %>"><%= scriptName %></button>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <p class="text-sm text-slate">No npm scripts were found for this directory.</p>
+            <% } %>
+
+            <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium text-ink">Execution status</div>
+                <div id="script-meta" class="mt-1 text-xs text-slate"><%= scriptStatus.scriptName ? `${scriptStatus.scriptName} • ${scriptStatus.cwd || ''}` : 'No script run yet.' %></div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="toggle-script-logs-button" type="button" class="button-secondary">Collapse Logs</button>
+                <button id="stop-script-button" type="button" class="button-danger <%= scriptStatus.isRunning ? '' : 'opacity-50' %>" <%= scriptStatus.isRunning ? '' : 'disabled' %>>Stop Running Script</button>
+              </div>
+            </div>
+
+            <div id="script-log-panel" class="mt-4 rounded-2xl bg-[#101918] p-4">
+              <div class="mb-2 text-xs uppercase tracking-[0.18em] text-[#9ab7af]">Logs</div>
+              <pre id="script-log-output" class="max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-[#e6f0ec]"><%= scriptStatus.logs || 'Script output will appear here.' %></pre>
+            </div>
+
+            <div class="mt-5">
+              <div class="label">Recent Script Runs</div>
+              <div id="script-history-list" class="mt-3 space-y-2">
+                <% if (scriptHistory.length) { %>
+                  <% scriptHistory.forEach((entry) => { %>
+                    <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">
+                      <div class="flex items-center justify-between gap-3">
+                        <span class="font-semibold text-ink"><%= entry.scriptName %></span>
+                        <span class="chip"><%= entry.status %></span>
+                      </div>
+                      <div class="mt-1 text-xs text-slate">
+                        Started <%= entry.startedAt || 'unknown' %>
+                        <% if (entry.completedAt) { %>
+                          • Finished <%= entry.completedAt %>
+                        <% } %>
+                        <% if (entry.exitCode !== null && entry.exitCode !== undefined) { %>
+                          • Exit <%= entry.exitCode %>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }) %>
+                <% } else { %>
+                  <div class="rounded-xl border border-line bg-white px-4 py-3 text-sm text-slate">No script history yet for this directory.</div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">File Search</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Search filenames and lightweight text content</h2>
+            </div>
+          </div>
+          <div class="panel-body">
+            <form id="search-form" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]">
+              <input name="query" class="input" placeholder="Search files or text">
+              <input name="extension" class="input lg:w-28" placeholder="ext">
+              <label class="flex items-center gap-2 rounded-xl border border-line bg-mist px-4 py-3 text-sm text-ink">
+                <input type="checkbox" name="includeContent" class="rounded border-line" <%= settings.searchMode === 'content' ? 'checked' : '' %>>
+                Search text
+              </label>
+              <select name="maxResults" class="input lg:w-28">
+                <% allowedSearchLimits.forEach((limit) => { %>
+                  <option value="<%= limit %>" <%= settings.searchMaxResults === limit ? 'selected' : '' %>><%= limit %> results</option>
+                <% }) %>
+              </select>
+              <button type="submit" class="button-primary">Search</button>
+            </form>
+            <div id="search-feedback" class="mt-4 hidden rounded-xl px-4 py-3 text-sm"></div>
+            <div id="search-summary" class="mt-4 rounded-xl border border-line bg-mist px-4 py-3 text-sm text-slate">
+              Enter a file or text query to search.
+            </div>
+
+            <div class="mt-5 grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+              <div>
+                <div class="label">Results</div>
+                <div id="search-results" class="mt-3 space-y-3">
+                  <div class="text-sm text-slate">Search results will appear here.</div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="label">Preview</div>
+                  <button id="reveal-file-button" type="button" class="button-secondary" disabled>Reveal File</button>
+                </div>
+                <div class="mt-3 rounded-2xl border border-line bg-mist p-4">
+                  <div id="file-preview-path" class="font-mono text-xs text-slate">No file selected.</div>
+                  <div id="file-preview-meta" class="mt-1 text-xs text-slate">Preview will load here.</div>
+                  <pre id="file-preview" class="mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-ink">Choose a search result to inspect a safe text preview.</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="space-y-6">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">Settings</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Local defaults for this app</h2>
+            </div>
+          </div>
+          <div class="panel-body">
+            <form method="post" action="/settings" class="space-y-4">
+              <div>
+                <label class="mb-2 block text-sm font-medium text-ink" for="searchMode">Default search mode</label>
+                <select id="searchMode" name="searchMode" class="input">
+                  <option value="filename" <%= settings.searchMode === 'filename' ? 'selected' : '' %>>Filename only</option>
+                  <option value="content" <%= settings.searchMode === 'content' ? 'selected' : '' %>>Filename + content</option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-ink" for="searchMaxResults">Default max results</label>
+                <select id="searchMaxResults" name="searchMaxResults" class="input">
+                  <% allowedSearchLimits.forEach((limit) => { %>
+                    <option value="<%= limit %>" <%= settings.searchMaxResults === limit ? 'selected' : '' %>><%= limit %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <label class="flex items-center gap-2 rounded-xl border border-line bg-mist px-4 py-3 text-sm text-ink">
+                <input type="checkbox" name="autoRefreshPorts" class="rounded border-line" <%= settings.autoRefreshPorts ? 'checked' : '' %>>
+                Refresh port status when the dashboard loads
+              </label>
+              <button type="submit" class="button-primary">Save Settings</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">Env Checker</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Compare keys across env files</h2>
+            </div>
+          </div>
+          <div class="panel-body">
+            <% const envSummary = inspection.envSummary; %>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-xl border border-line bg-mist px-4 py-3 text-sm text-slate">Example keys <span class="ml-2 font-semibold text-ink"><%= envSummary.counts.example %></span></div>
+              <div class="rounded-xl border border-line bg-mist px-4 py-3 text-sm text-slate">Shared across all <span class="ml-2 font-semibold text-ink"><%= envSummary.counts.aligned %></span></div>
+              <div class="rounded-xl border border-line bg-mist px-4 py-3 text-sm text-slate">.env keys <span class="ml-2 font-semibold text-ink"><%= envSummary.counts.env %></span></div>
+              <div class="rounded-xl border border-line bg-mist px-4 py-3 text-sm text-slate">.env.local keys <span class="ml-2 font-semibold text-ink"><%= envSummary.counts.local %></span></div>
+            </div>
+
+            <div class="mt-4 rounded-xl border border-line bg-mist px-4 py-3">
+              <div class="text-sm font-semibold text-ink">Files present</div>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <% ['.env', '.env.example', '.env.local'].forEach((fileName) => { %>
+                  <span class="chip <%= envSummary.fileKeys[fileName] ? '' : 'opacity-60' %>"><%= envSummary.fileKeys[fileName] ? 'Found' : 'Missing' %> <%= fileName %></span>
+                <% }) %>
+              </div>
+            </div>
+
+            <div class="mt-4 space-y-4">
+              <% Object.values(envSummary.groups).forEach((group) => { %>
+                <div class="rounded-xl border border-line bg-white px-4 py-4">
+                  <div class="text-sm font-semibold text-ink"><%= group.label %></div>
+                  <div class="mt-2 text-sm text-slate"><%= group.items.length ? group.items.join(", ") : "None." %></div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="label">Port Helper</div>
+              <h2 class="mt-1 text-lg font-semibold text-ink">Inspect common local dev ports</h2>
+            </div>
+            <button id="refresh-ports-button" type="button" class="button-secondary">Refresh</button>
+          </div>
+          <div class="panel-body">
+            <div id="port-feedback" class="mb-4 hidden rounded-xl px-4 py-3 text-sm"></div>
+            <div id="ports-grid" class="grid gap-3 sm:grid-cols-2"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  <% } %>
+</main>
+<script>
+  window.__REPO_TOOLS_SETTINGS__ = <%- JSON.stringify(settings || {}) %>;
+</script>
+<%- include("partials/footer") %>
